@@ -162,6 +162,11 @@ public sealed class CciFile : IDisposable
                 DisposeParts(parts);
                 return CciError.AccessDenied;
             }
+            catch (ArgumentException)
+            {
+                DisposeParts(parts);
+                return CciError.InvalidArgument;
+            }
             catch (IOException)
             {
                 DisposeParts(parts);
@@ -724,3 +729,4 @@ public sealed class CciFile : IDisposable
         }
     }
 }
+

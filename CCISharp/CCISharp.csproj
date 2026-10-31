@@ -18,6 +18,11 @@
     <!-- XML documentation -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
+    <!-- Stylistic analyzer rules: this library groups small related records in
+         one file and keeps the hot read/write loops inline. Revisit when the
+         public surface stabilizes. -->
+    <NoWarn>$(NoWarn);MA0048;MA0051</NoWarn>
+
     <!-- Trimming and AOT compatibility -->
     <IsTrimmable>true</IsTrimmable>
     <IsAotCompatible>true</IsAotCompatible>
@@ -63,3 +68,4 @@
   </ItemGroup>
 
 </Project>
+

@@ -38,6 +38,10 @@ public static class CciWriter
         {
             return CciError.AccessDenied;
         }
+        catch (ArgumentException)
+        {
+            return CciError.InvalidArgument;
+        }
         catch (IOException)
         {
             return CciError.Io;
@@ -103,6 +107,10 @@ public static class CciWriter
         catch (UnauthorizedAccessException)
         {
             return CciError.AccessDenied;
+        }
+        catch (ArgumentException)
+        {
+            return CciError.InvalidArgument;
         }
         catch (IOException)
         {
@@ -453,6 +461,10 @@ public static class CciWriter
         {
             return CciError.AccessDenied;
         }
+        catch (ArgumentException)
+        {
+            return CciError.InvalidArgument;
+        }
         catch (IOException)
         {
             return CciError.Io;
@@ -533,3 +545,4 @@ public static class CciWriter
         }
     }
 }
+
