@@ -1,7 +1,17 @@
 # CCISharp
 
+[![CI](https://github.com/purelogiccode/CCISharp/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/purelogiccode/CCISharp/actions/workflows/ci.yml)
 [![NuGet](https://img.shields.io/nuget/v/CCISharp.svg)](https://www.nuget.org/packages/CCISharp)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/CCISharp.svg)](https://www.nuget.org/packages/CCISharp)
+[![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0-512bd4.svg)](https://dotnet.microsoft.com/download)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d7.svg)](https://github.com/purelogiccode/CCISharp)
+[![Format](https://img.shields.io/badge/format-CCI%20%2F%20CCIM-6f42c1.svg)](https://github.com/Team-Resurgent/libCCI/blob/main/FORMAT.md)
+[![Compression](https://img.shields.io/badge/compression-LZ4-0b7285.svg)](https://github.com/lz4/lz4)
+![Trimmable](https://img.shields.io/badge/trimming-compatible-success)
+![AOT](https://img.shields.io/badge/AOT-compatible-success)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/purelogiccode/CCISharp)](https://github.com/purelogiccode/CCISharp/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/purelogiccode/CCISharp)](https://github.com/purelogiccode/CCISharp/issues)
 
 **CCISharp** is a pure-managed C# library for reading and writing **CCI**
 ("CCIM", Cerbios Compressed Image) original-Xbox disc images. It is an
@@ -177,3 +187,4 @@ testing only and is not part of this package.
 MIT. See [LICENSE](LICENSE) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 The CCI format specification comes from Team-Resurgent/libCCI
 (GPL-2.0-or-later); no libCCI code is included in this MIT package.
+
