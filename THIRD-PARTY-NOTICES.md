@@ -23,6 +23,15 @@ CCISharp is an independent, clean-room MIT implementation of the CCI
 - `libCCI` bundles LZ4 under the **BSD-2-Clause** license; that code is not
   included here.
 
+## Test-only reference binaries
+
+`CCISharp.Tests/references/libCCI` contains the unmodified `cci_encode.exe`,
+`cci_extract.exe` and `cci_info.exe` built from Team-Resurgent/libCCI at commit
+`1b0087e` (**GPL-2.0-or-later**). They are used only as an external
+interoperability oracle by the Windows test job; they are not linked into
+CCISharp and are not part of the NuGet package. Source for this exact build:
+<https://github.com/Team-Resurgent/libCCI/tree/1b0087e>.
+
 ## xdvdfs
 
 - **antangelo/xdvdfs** (<https://github.com/antangelo/xdvdfs>) is MIT licensed.

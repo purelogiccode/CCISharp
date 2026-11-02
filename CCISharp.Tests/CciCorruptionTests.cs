@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+
 namespace CCISharp.Tests;
 
 public sealed class CciCorruptionTests
@@ -124,6 +126,71 @@ public sealed class CciCorruptionTests
         Assert.NotNull(report);
         Assert.False(report.IsValid);
         Assert.NotEmpty(report.Issues);
+    }
+
+    [Fact]
+    public void OversizedIndex_IsRejectedWithoutThrowing()
+    {
+        using TempDir dir = new();
+        (string path, byte[] bytes) = CreateValid(dir);
+
+        // ~34 GiB claimed (16.7M sectors) needs an index just over the 64 MiB
+        // cap; a corrupt header must be rejected by the cap, not by an
+        // allocation failure.
+        TestImages.WriteUInt64(bytes, 8, 16_777_216UL * CciFormat.SectorSize);
+        File.WriteAllBytes(path, bytes);
+
+        Assert.Equal(CciError.InvalidIndex, CciFile.Open(path, out _));
+    }
+
+    [Fact]
+    public void IndexCapOption_IsEnforced()
+    {
+        using TempDir dir = new();
+        (string path, _) = CreateValid(dir);
+
+        Assert.Equal(
+            CciError.InvalidIndex,
+            CciFile.Open(path, new CciReaderOptions { MaxIndexBytes = 16 }, out _));
+    }
+
+    [Fact]
+    public void IndexLongerThanIntMax_IsRejectedWithoutThrowing()
+    {
+        using TempDir dir = new();
+        string path = dir.File("huge.cci");
+
+        // Sparse 2.5 GiB part whose header claims a 2.4 GiB index: the old
+        // (int) cast wrapped negative and ArrayPool.Rent threw. The cap must
+        // return InvalidIndex before the index is read.
+        const ulong sectors = 600_000_000; // index = 2_400_000_004 bytes > int.MaxValue
+        using (FileStream stream = File.Create(path))
+        {
+            stream.SetLength(2_500_000_000);
+            byte[] header = new byte[CciFormat.HeaderSize];
+            BinaryPrimitives.WriteUInt32LittleEndian(header, CciFormat.Magic);
+            BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(4), CciFormat.HeaderSize);
+            BinaryPrimitives.WriteUInt64LittleEndian(header.AsSpan(8), sectors * CciFormat.SectorSize);
+            BinaryPrimitives.WriteUInt64LittleEndian(header.AsSpan(16), CciFormat.HeaderSize);
+            BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(24), CciFormat.SectorSize);
+            header[28] = CciFormat.Version;
+            header[29] = CciFormat.IndexAlignment;
+            stream.Write(header);
+        }
+
+        Assert.Equal(CciError.InvalidIndex, CciFile.Open(path, out _));
+    }
+
+    [Fact]
+    public void SectorCountNearIntMax_IsRejectedWithoutThrowing()
+    {
+        using TempDir dir = new();
+        (string path, byte[] bytes) = CreateValid(dir);
+
+        TestImages.WriteUInt64(bytes, 8, (ulong)int.MaxValue * CciFormat.SectorSize);
+        File.WriteAllBytes(path, bytes);
+
+        Assert.Equal(CciError.InvalidIndex, CciFile.Open(path, out _));
     }
 
     private static (string Path, byte[] Bytes) CreateValid(TempDir dir)

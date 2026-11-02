@@ -40,7 +40,7 @@ internal sealed class CciIndex
         out CciIndex? index)
     {
         index = null;
-        if (sectorCount < 0 || raw.Length != (sectorCount + 1) * 4)
+        if (sectorCount < 0 || raw.Length != ((long)sectorCount + 1) * 4)
         {
             return CciError.InvalidIndex;
         }

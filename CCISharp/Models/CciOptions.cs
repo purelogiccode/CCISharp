@@ -17,6 +17,14 @@ public sealed record CciReaderOptions
     /// corrupt indexes. Defaults to 1 MiB (a valid blob is at most 2048 bytes).
     /// </summary>
     public int MaxSectorSpan { get; init; } = 1 << 20;
+
+    /// <summary>
+    /// Hard cap on index bytes read from one part. Internal in 1.0.1: the default
+    /// (<see cref="CciFormat.MaxIndexBytes"/>, 64 MiB) is deliberately far above
+    /// any valid part, so it needs no public knob yet. Tests lower it to exercise
+    /// the rejection path without multi-gigabyte files.
+    /// </summary>
+    internal long MaxIndexBytes { get; init; } = CciFormat.MaxIndexBytes;
 }
 
 /// <summary>Options for creating a CCI image.</summary>

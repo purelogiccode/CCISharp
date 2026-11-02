@@ -12,6 +12,8 @@
     <RepositoryUrl>https://github.com/purelogiccode/CCISharp.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <RepositoryBranch>master</RepositoryBranch>
+    <!-- 1.0.0 is the published API baseline; any break must be deliberate. -->
+    <PackageValidationBaselineVersion>1.0.0</PackageValidationBaselineVersion>
   </PropertyGroup>
 
 </Project>

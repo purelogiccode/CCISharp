@@ -599,6 +599,15 @@ public sealed class CciFile : IDisposable
         long indexOffset = (long)header.IndexOffset;
         long indexLength = checked(((long)header.SectorCount + 1) * 4);
 
+        // Cap the index before any allocation: a hostile header can claim a huge
+        // sector count on a large part, and the int casts below would otherwise
+        // truncate the length and throw from ArrayPool.Rent instead of returning
+        // an error code.
+        if (indexLength > options.MaxIndexBytes)
+        {
+            return CciError.InvalidIndex;
+        }
+
         if (indexOffset < CciFormat.HeaderSize ||
             indexOffset > fileLength ||
             indexLength > fileLength - indexOffset)
@@ -606,13 +615,14 @@ public sealed class CciFile : IDisposable
             return CciError.InvalidIndex;
         }
 
-        byte[] indexBytes = ArrayPool<byte>.Shared.Rent((int)indexLength);
+        int indexSize = (int)indexLength;
+        byte[] indexBytes = ArrayPool<byte>.Shared.Rent(indexSize);
         try
         {
             try
             {
                 stream.Seek(indexOffset, SeekOrigin.Begin);
-                stream.ReadExactly(indexBytes, 0, (int)indexLength);
+                stream.ReadExactly(indexBytes, 0, indexSize);
             }
             catch (EndOfStreamException)
             {
@@ -624,7 +634,7 @@ public sealed class CciFile : IDisposable
             }
 
             error = CciIndex.TryRead(
-                indexBytes.AsSpan(0, (int)indexLength),
+                indexBytes.AsSpan(0, indexSize),
                 (int)header.SectorCount,
                 header.IndexOffset,
                 options.MaxSectorSpan,

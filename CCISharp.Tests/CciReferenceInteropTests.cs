@@ -64,17 +64,30 @@ public sealed class CciReferenceInteropTests
 
     private static string? FindReferenceTools()
     {
+        string? env = Environment.GetEnvironmentVariable("CCI_LIBCCI_DIR");
+        if (!string.IsNullOrEmpty(env))
+        {
+            return HasTools(env)
+                ? env
+                : throw new InvalidOperationException(
+                    $"CCI_LIBCCI_DIR='{env}' does not contain cci_encode.exe, cci_extract.exe and cci_info.exe.");
+        }
+
         if (!OperatingSystem.IsWindows())
         {
+            // The reference build is Windows-only; Linux/macOS CI cannot run it.
             return null;
         }
 
-        string? env = Environment.GetEnvironmentVariable("CCI_LIBCCI_DIR");
-        if (!string.IsNullOrEmpty(env) && File.Exists(Path.Combine(env, "cci_encode.exe")))
+        // Checked in beside the tests (see references/libCCI/README.md) so the
+        // Windows CI job verifies interoperability instead of silently passing.
+        string bundled = Path.Combine(AppContext.BaseDirectory, "references", "libCCI");
+        if (HasTools(bundled))
         {
-            return env;
+            return bundled;
         }
 
+        // Local development: a sibling XISOSharp checkout holds the reference build.
         string? directory = AppContext.BaseDirectory;
         for (int i = 0; i < 10 && directory is not null; i++)
         {
@@ -86,7 +99,7 @@ public sealed class CciReferenceInteropTests
                 "build",
                 "Release");
 
-            if (File.Exists(Path.Combine(candidate, "cci_encode.exe")))
+            if (HasTools(candidate))
             {
                 return candidate;
             }
@@ -94,8 +107,15 @@ public sealed class CciReferenceInteropTests
             directory = Path.GetDirectoryName(directory.TrimEnd(Path.DirectorySeparatorChar));
         }
 
-        return null;
+        throw new InvalidOperationException(
+            "The libCCI reference tools were not found. They are checked in under " +
+            "CCISharp.Tests/references/libCCI; rebuild the test project or set CCI_LIBCCI_DIR.");
     }
+
+    private static bool HasTools(string directory) =>
+        File.Exists(Path.Combine(directory, "cci_encode.exe")) &&
+        File.Exists(Path.Combine(directory, "cci_extract.exe")) &&
+        File.Exists(Path.Combine(directory, "cci_info.exe"));
 
     private static void RunTool(string executable, params string[] arguments)
     {

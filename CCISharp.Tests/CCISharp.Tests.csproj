@@ -32,4 +32,10 @@
     <ProjectReference Include="..\CCISharp\CCISharp.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- libCCI reference binaries, used only as an external interop oracle.
+         GPL-2.0-or-later; see references/libCCI/README.md. -->
+    <None Include="references\libCCI\*.exe" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

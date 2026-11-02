@@ -153,6 +153,10 @@ CCISharp's encoder is compatible with the format but is not byte-identical to
 libCCI/Repackinator output (different LZ4 encoders). Any conforming LZ4 block
 is accepted by readers.
 
+A part's index is capped at 64 MiB (~34 GiB of sectors). Valid parts split at
+~4 GiB and need at most ~8 MiB, so the cap only rejects corrupt or hostile
+headers; oversized indexes return `CciError.InvalidIndex` without allocating.
+
 ## Error handling
 
 Public APIs return `CciError`. `CciError.None` means success. Argument errors
@@ -171,7 +175,10 @@ The repository uses MinVer; release tags are `v1.0.0`, `v1.0.1`, ….
 
 ## Interoperability
 
-Verified against the reference `libCCI` tools:
+Both directions are verified for every push by the Windows CI job, using the
+unmodified reference `libCCI` binaries checked in under
+`CCISharp.Tests/references/libCCI` (the tests fail rather than skip when the
+tools are missing):
 
 ```sh
 cci_encode game.iso game        # -> game.cci

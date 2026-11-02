@@ -1,0 +1,30 @@
+root = true
+
+# ------------------------------------------------------------------
+# Base formatting contract (applies to every text file in the repo).
+# Line endings are normalized by Git; no EOL rule here so the format
+# gate passes on Linux (LF checkouts) and Windows (CRLF checkouts).
+# ------------------------------------------------------------------
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# ------------------------------------------------------------------
+# Project/build/script/data files: 2-space indent by convention.
+# ------------------------------------------------------------------
+[*.{csproj,props,targets,yml,yaml,json,config,sln}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+# ------------------------------------------------------------------
+# C# style (suggestion-only; analyzer severities live in the csproj).
+# ------------------------------------------------------------------
+[*.cs]
+dotnet_sort_system_directives_first = true:suggestion
+dotnet_separate_import_directive_groups = false:suggestion
+csharp_style_namespace_declarations = file_scoped:suggestion

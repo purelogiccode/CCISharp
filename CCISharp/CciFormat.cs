@@ -30,6 +30,15 @@ public static class CciFormat
     /// <summary>Largest byte offset representable by a 31-bit index position.</summary>
     internal const long MaxRepresentablePosition = 0x7FFFFFFFL << IndexAlignment;
 
+    /// <summary>
+    /// Hard cap on the index bytes accepted from one part (64 MiB, i.e. room for
+    /// ~34 GiB of sectors). A valid part splits at <see cref="DefaultSplitBytes"/>
+    /// and needs at most ~8 MiB, so the cap only rejects corrupt or hostile
+    /// headers, which otherwise force the reader to allocate an index sized only
+    /// by the part's file length.
+    /// </summary>
+    internal const long MaxIndexBytes = 64L << 20;
+
     /// <summary>File extension used by CCI images.</summary>
     public const string Extension = ".cci";
 }
