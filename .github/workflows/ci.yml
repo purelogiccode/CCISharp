@@ -177,13 +177,81 @@ jobs:
         continue-on-error: true
         run: dotnet list CCISharp.sln package --deprecated --no-restore
 
+  fuzz-smoke:
+    name: fuzz-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            **/Directory.Build.props
+            global.json
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Mutation fuzz
+        run: dotnet run --project CCISharp.Fuzz/CCISharp.Fuzz.csproj -c Release -- --seconds 60
+
+  cli-smoke:
+    name: cli-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            **/Directory.Build.props
+            global.json
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build CLI
+        run: dotnet build CCISharp.Cli/CCISharp.Cli.csproj -c Release --no-restore
+
+      - name: Pack, inspect, validate and unpack
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          head -c 2097152 /dev/urandom > "$work/source.iso"
+          dotnet run --project CCISharp.Cli/CCISharp.Cli.csproj -c Release --no-build -- \
+            pack "$work/source.iso" "$work/game" --level 12 --jobs 4 --single -y
+          dotnet run --project CCISharp.Cli/CCISharp.Cli.csproj -c Release --no-build -- \
+            info "$work/game.cci"
+          dotnet run --project CCISharp.Cli/CCISharp.Cli.csproj -c Release --no-build -- \
+            validate "$work/game.cci" --deep
+          dotnet run --project CCISharp.Cli/CCISharp.Cli.csproj -c Release --no-build -- \
+            unpack "$work/game.cci" "$work/out.iso" -y
+          cmp "$work/source.iso" "$work/out.iso"
+
   pack:
     name: pack
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Package only when every gate is green: a tag push then publishes exactly
     # what CI validated.
-    needs: [build-and-test, dependency-audit]
+    needs: [build-and-test, dependency-audit, fuzz-smoke, cli-smoke]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

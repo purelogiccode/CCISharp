@@ -8,11 +8,11 @@ public sealed class CciSectorCodecTests
         byte[] sector = new byte[CciFormat.SectorSize];
         byte[] encoded = new byte[CciFormat.SectorSize];
         byte[] decoded = new byte[CciFormat.SectorSize];
-        int[] table = new int[Lz4.HashTableSize];
+        using CciSectorEncoder encoder = new(9);
 
         Assert.Equal(
             CciError.None,
-            CciSectorCodec.TryEncode(sector, encoded, 1, table, out int written, out bool compressed));
+            encoder.Encode(sector, encoded, out int written, out bool compressed));
 
         Assert.True(compressed);
         Assert.True(written < CciFormat.SectorSize);
@@ -27,11 +27,11 @@ public sealed class CciSectorCodecTests
         sector.AsSpan().Fill(0x5A);
         byte[] encoded = new byte[CciFormat.SectorSize];
         byte[] decoded = new byte[CciFormat.SectorSize];
-        int[] table = new int[Lz4.HashTableSize];
+        using CciSectorEncoder encoder = new(9);
 
         Assert.Equal(
             CciError.None,
-            CciSectorCodec.TryEncode(sector, encoded, 1, table, out int written, out bool compressed));
+            encoder.Encode(sector, encoded, out int written, out bool compressed));
 
         Assert.True(compressed);
         Assert.Equal(CciError.None, CciSectorCodec.TryDecode(encoded.AsSpan(0, written), compressed, decoded));
@@ -44,11 +44,11 @@ public sealed class CciSectorCodecTests
         byte[] sector = TestImages.BuildRandom(1);
         byte[] encoded = new byte[CciFormat.SectorSize];
         byte[] decoded = new byte[CciFormat.SectorSize];
-        int[] table = new int[Lz4.HashTableSize];
+        using CciSectorEncoder encoder = new(9);
 
         Assert.Equal(
             CciError.None,
-            CciSectorCodec.TryEncode(sector, encoded, 1, table, out int written, out bool compressed));
+            encoder.Encode(sector, encoded, out int written, out bool compressed));
 
         Assert.False(compressed);
         Assert.Equal(CciFormat.SectorSize, written);
@@ -57,15 +57,32 @@ public sealed class CciSectorCodecTests
     }
 
     [Fact]
+    public void HcSector_RoundTrips()
+    {
+        byte[] sector = TestImages.BuildMixed(1);
+        byte[] encoded = new byte[CciFormat.SectorSize];
+        byte[] decoded = new byte[CciFormat.SectorSize];
+        using CciSectorEncoder encoder = new(12);
+
+        Assert.Equal(
+            CciError.None,
+            encoder.Encode(sector, encoded, out int written, out bool compressed));
+
+        Assert.True(compressed);
+        Assert.Equal(CciError.None, CciSectorCodec.TryDecode(encoded.AsSpan(0, written), compressed, decoded));
+        Assert.Equal(sector, decoded);
+    }
+
+    [Fact]
     public void LevelZero_StoresRaw()
     {
         byte[] sector = new byte[CciFormat.SectorSize];
         byte[] encoded = new byte[CciFormat.SectorSize];
-        int[] table = new int[Lz4.HashTableSize];
+        using CciSectorEncoder encoder = new(0);
 
         Assert.Equal(
             CciError.None,
-            CciSectorCodec.TryEncode(sector, encoded, 0, table, out int written, out bool compressed));
+            encoder.Encode(sector, encoded, out int written, out bool compressed));
 
         Assert.False(compressed);
         Assert.Equal(CciFormat.SectorSize, written);

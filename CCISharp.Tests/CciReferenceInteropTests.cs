@@ -62,6 +62,89 @@ public sealed class CciReferenceInteropTests
         RunTool(Path.Combine(tools, "cci_info.exe"), cci);
     }
 
+    [Fact]
+    public void CciSharpHcOutput_IsReadableByReferenceDecoder()
+    {
+        string? tools = FindReferenceTools();
+        if (tools is null)
+        {
+            return;
+        }
+
+        using TempDir dir = new();
+        byte[] raw = TestImages.BuildMixed(40);
+        string source = dir.File("source.iso");
+        string cci = dir.File("ours-hc.cci");
+        string extracted = dir.File("extracted-hc.iso");
+        File.WriteAllBytes(source, raw);
+
+        Assert.Equal(
+            CciError.None,
+            CciWriter.Compress(source, cci, new CciWriteOptions { SplitBytes = 0, Level = 12 }));
+
+        RunTool(Path.Combine(tools, "cci_extract.exe"), cci, extracted);
+        Assert.Equal(raw, File.ReadAllBytes(extracted));
+
+        RunTool(Path.Combine(tools, "cci_info.exe"), cci);
+    }
+
+    [Fact]
+    public void CciSharpParallelOutput_IsReadableByReferenceDecoder()
+    {
+        string? tools = FindReferenceTools();
+        if (tools is null)
+        {
+            return;
+        }
+
+        using TempDir dir = new();
+        byte[] raw = TestImages.BuildMixed(40);
+        string source = dir.File("source.iso");
+        string cci = dir.File("ours-parallel.cci");
+        string extracted = dir.File("extracted-parallel.iso");
+        File.WriteAllBytes(source, raw);
+
+        Assert.Equal(
+            CciError.None,
+            CciWriter.Compress(source, cci, new CciWriteOptions { SplitBytes = 0, Level = 12, Jobs = 4 }));
+
+        RunTool(Path.Combine(tools, "cci_extract.exe"), cci, extracted);
+        Assert.Equal(raw, File.ReadAllBytes(extracted));
+
+        RunTool(Path.Combine(tools, "cci_info.exe"), cci);
+    }
+
+    [Fact]
+    public void ReferenceHcEncoder_OutputIsReadable()
+    {
+        string? tools = FindReferenceTools();
+        if (tools is null)
+        {
+            return;
+        }
+
+        using TempDir dir = new();
+        byte[] raw = TestImages.BuildMixed(40);
+        string source = dir.File("source.iso");
+        File.WriteAllBytes(source, raw);
+
+        RunTool(Path.Combine(tools, "cci_encode.exe"), source, dir.File("reference-hc"), "0", "12");
+
+        Assert.Equal(CciError.None, CciFile.Open(dir.File("reference-hc.cci"), out CciFile? opened));
+        using CciFile file = opened!;
+
+        Assert.Equal(40UL, file.TotalSectors);
+        Assert.Equal(CciError.None, file.Validate(deep: true, out CciValidationReport? report));
+        Assert.True(report!.IsValid);
+
+        byte[] sector = new byte[CciFormat.SectorSize];
+        for (ulong index = 0; index < file.TotalSectors; index++)
+        {
+            Assert.Equal(CciError.None, file.ReadSector(index, sector));
+            Assert.Equal(raw.AsSpan((int)(index * CciFormat.SectorSize), CciFormat.SectorSize).ToArray(), sector);
+        }
+    }
+
     private static string? FindReferenceTools()
     {
         string? env = Environment.GetEnvironmentVariable("CCI_LIBCCI_DIR");

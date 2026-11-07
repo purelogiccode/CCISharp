@@ -664,16 +664,45 @@ public sealed class CciFile : IDisposable
         }
 
         string stem = path[..^CciFormat.Extension.Length];
-        if (stem.Length < 2 || stem[^2] != '.' || !char.IsDigit(stem[^1]))
+        int dot = stem.LastIndexOf('.');
+        if (dot < 0 || dot == stem.Length - 1)
         {
             return single;
         }
 
-        string baseName = stem[..^2];
+        // Part numbers may have more than one digit when reading. The writer
+        // still emits .1.cci … .9.cci for reference compatibility, but split
+        // sets produced by other tools can legitimately extend past .9.
+        string digits = stem[(dot + 1)..];
+        if (digits.Length == 0 || digits[0] == '0')
+        {
+            return single;
+        }
+
+        foreach (char digit in digits)
+        {
+            if (digit is < '0' or > '9')
+            {
+                return single;
+            }
+        }
+
+        if (!int.TryParse(digits, System.Globalization.NumberStyles.None,
+                CultureInfo.InvariantCulture, out int requestedPart) || requestedPart < 1)
+        {
+            return single;
+        }
+
+        string baseName = stem[..dot];
+        if (baseName.Length == 0)
+        {
+            return single;
+        }
+
         string extension = path[^CciFormat.Extension.Length..];
         List<string> parts = new(9);
 
-        for (int index = 1; index <= 9; index++)
+        for (int index = 1; index < int.MaxValue; index++)
         {
             string candidate = string.Concat(
                 baseName,
@@ -689,7 +718,9 @@ public sealed class CciFile : IDisposable
             parts.Add(candidate);
         }
 
-        return parts.Count > 0 ? parts : single;
+        // A numeric filename that is not part of a contiguous set starting at
+        // .1 is a standalone image (e.g. game.10.cci with no game.1.cci).
+        return parts.Count >= requestedPart ? parts : single;
     }
 
     private Part? FindPart(ulong sector)

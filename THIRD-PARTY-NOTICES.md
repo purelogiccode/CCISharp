@@ -19,6 +19,10 @@ CCISharp is an independent, clean-room MIT implementation of the CCI
   **lz4_flex 0.11.3** (<https://github.com/PSeitz/lz4_flex>), MIT License,
   Copyright (c) 2019 Pascal Seitz. It is byte-compatible with `lz4_flex`
   block compression and decodes any conforming LZ4 block.
+- `CCISharp/Lz4Hc.cs` is an independent managed high-compression encoder
+  implemented from the public LZ4 block format specification. It is not a port
+  of liblz4 and does not include liblz4 source code; HC output is best-effort
+  byte parity, not a guarantee.
 - The CCI container itself uses raw LZ4 blocks; no frame format is involved.
 - `libCCI` bundles LZ4 under the **BSD-2-Clause** license; that code is not
   included here.

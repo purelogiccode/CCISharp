@@ -30,11 +30,22 @@ public sealed record CciReaderOptions
 /// <summary>Options for creating a CCI image.</summary>
 public sealed record CciWriteOptions
 {
+    /// <summary>Maximum accepted <see cref="Jobs"/> value.</summary>
+    public const int MaxJobs = 64;
+
     /// <summary>
-    /// Compression preset: <c>0</c> stores every sector raw; <c>1..9</c> map to
-    /// the LZ4 block encoder's acceleration (<c>10 - level</c>, 9 = smallest).
+    /// Compression preset: <c>0</c> stores every sector raw; <c>1..9</c> use
+    /// the fast LZ4 block encoder (acceleration <c>10 - level</c>, 9 =
+    /// smallest); <c>10..12</c> use the LZ4-HC encoder (12 = highest effort,
+    /// matching the reference CCI encoder's HC preset).
     /// </summary>
     public int Level { get; init; } = 9;
+
+    /// <summary>
+    /// Number of workers used to encode sectors in parallel. Output is
+    /// byte-identical to <see cref="Jobs"/> = 1. Defaults to 1.
+    /// </summary>
+    public int Jobs { get; init; } = 1;
 
     /// <summary>
     /// Split target in bytes. <c>0</c> writes a single part. Defaults to

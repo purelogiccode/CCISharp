@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Buffers.Binary;
 
 namespace CCISharp;
@@ -154,10 +153,7 @@ public static class CciWriter
             return CciError.InvalidSize;
         }
 
-        int[] hashTable = new int[Lz4.HashTableSize];
-        byte[] sector = ArrayPool<byte>.Shared.Rent(CciFormat.SectorSize);
-        byte[] block = ArrayPool<byte>.Shared.Rent(CciFormat.SectorSize);
-
+        using CciSectorPipeline pipeline = new(source, options.Level, options.Jobs, options.CancellationToken);
         try
         {
             options.CancellationToken.ThrowIfCancellationRequested();
@@ -170,38 +166,13 @@ public static class CciWriter
 
             long position = CciFormat.HeaderSize;
             List<uint> entries = new((int)totalSectors);
-            int acceleration = Acceleration(options.Level);
-            long bytesIn = 0;
             long bytesOut = 0;
             long reportInterval = Math.Max(1, totalSectors / 100);
+            long index = 0;
 
-            for (long index = 0; index < totalSectors; index++)
+            while (pipeline.TryNext(out ReadOnlySpan<byte> block, out bool compressed))
             {
                 options.CancellationToken.ThrowIfCancellationRequested();
-
-                int read = ReadFull(source, sector, CciFormat.SectorSize);
-                if (read == 0)
-                {
-                    return CciError.Truncated;
-                }
-
-                if (read < CciFormat.SectorSize)
-                {
-                    Array.Clear(sector, read, CciFormat.SectorSize - read);
-                }
-
-                CciError encode = CciSectorCodec.TryEncode(
-                    sector.AsSpan(0, CciFormat.SectorSize),
-                    block,
-                    acceleration,
-                    hashTable,
-                    out int written,
-                    out bool compressed);
-
-                if (encode != CciError.None)
-                {
-                    return encode;
-                }
 
                 if (position > CciFormat.MaxRepresentablePosition)
                 {
@@ -210,16 +181,32 @@ public static class CciWriter
 
                 entries.Add((uint)(position >> CciFormat.IndexAlignment) |
                             (compressed ? 0x80000000u : 0u));
-                output.Write(block, 0, written);
+                output.Write(block);
 
-                position += written;
-                bytesIn += read;
-                bytesOut += written;
+                position += block.Length;
+                bytesOut += block.Length;
 
                 if (index % reportInterval == 0)
                 {
-                    options.Progress?.Report(new CciProgress(index, totalSectors, bytesIn, bytesOut, 0));
+                    options.Progress?.Report(new CciProgress(
+                        index,
+                        totalSectors,
+                        pipeline.BytesRead,
+                        bytesOut,
+                        0));
                 }
+
+                index++;
+            }
+
+            if (pipeline.Error != CciError.None)
+            {
+                return pipeline.Error;
+            }
+
+            if (index != totalSectors)
+            {
+                return CciError.Truncated;
             }
 
             long indexOffset = position;
@@ -251,7 +238,7 @@ public static class CciWriter
             output.Write(headerBytes);
             output.Flush();
 
-            options.Progress?.Report(new CciProgress(totalSectors, totalSectors, bytesIn, bytesOut, 0));
+            options.Progress?.Report(new CciProgress(totalSectors, totalSectors, pipeline.BytesRead, bytesOut, 0));
             return CciError.None;
         }
         catch (OperationCanceledException)
@@ -265,11 +252,6 @@ public static class CciWriter
         catch (UnauthorizedAccessException)
         {
             return CciError.AccessDenied;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(sector);
-            ArrayPool<byte>.Shared.Return(block);
         }
     }
 
@@ -287,14 +269,18 @@ public static class CciWriter
             return CciError.InvalidSize;
         }
 
-        int[] hashTable = new int[Lz4.HashTableSize];
-        byte[] sector = ArrayPool<byte>.Shared.Rent(CciFormat.SectorSize);
-        byte[] block = ArrayPool<byte>.Shared.Rent(CciFormat.SectorSize);
+        using CciSectorPipeline pipeline = new(source, options.Level, options.Jobs, options.CancellationToken);
         List<(string Temp, string Final)> files = new();
         bool success = false;
         Span<byte> placeholder = stackalloc byte[CciFormat.HeaderSize];
         Span<byte> word = stackalloc byte[4];
         Span<byte> headerBytes = stackalloc byte[CciFormat.HeaderSize];
+
+        // A split boundary is decided after the next sector has been encoded,
+        // so one encoded block can be parked until the next part starts.
+        byte[]? pendingBytes = null;
+        bool pendingCompressed = false;
+        int pendingLength = 0;
 
         try
         {
@@ -302,7 +288,6 @@ public static class CciWriter
             long bytesOut = 0;
             bool endOfInput = false;
             int partIndex = 0;
-            int acceleration = Acceleration(options.Level);
             long reportInterval = Math.Max(1, totalSectors / 100);
 
             while (!endOfInput)
@@ -335,38 +320,35 @@ public static class CciWriter
                     {
                         options.CancellationToken.ThrowIfCancellationRequested();
 
-                        if (split && partSectors > 0)
+                        ReadOnlySpan<byte> block;
+                        bool compressed;
+                        if (pendingBytes is not null)
                         {
-                            long estimated = position + ((partSectors + 2) * 4L) + CciFormat.SectorSize;
-                            if (estimated > options.SplitBytes)
-                            {
-                                break;
-                            }
+                            block = pendingBytes.AsSpan(0, pendingLength);
+                            compressed = pendingCompressed;
+                            pendingBytes = null;
                         }
-
-                        int read = ReadFull(source, sector, CciFormat.SectorSize);
-                        if (read == 0)
+                        else if (pipeline.TryNext(out ReadOnlySpan<byte> next, out bool nextCompressed))
+                        {
+                            block = next;
+                            compressed = nextCompressed;
+                        }
+                        else
                         {
                             endOfInput = true;
                             break;
                         }
 
-                        if (read < CciFormat.SectorSize)
+                        if (split && partSectors > 0)
                         {
-                            Array.Clear(sector, read, CciFormat.SectorSize - read);
-                        }
-
-                        CciError encode = CciSectorCodec.TryEncode(
-                            sector.AsSpan(0, CciFormat.SectorSize),
-                            block,
-                            acceleration,
-                            hashTable,
-                            out int written,
-                            out bool compressed);
-
-                        if (encode != CciError.None)
-                        {
-                            return encode;
+                            long estimated = position + ((partSectors + 2) * 4L) + CciFormat.SectorSize;
+                            if (estimated > options.SplitBytes)
+                            {
+                                pendingBytes = block.ToArray();
+                                pendingLength = block.Length;
+                                pendingCompressed = compressed;
+                                break;
+                            }
                         }
 
                         if (position > CciFormat.MaxRepresentablePosition)
@@ -376,19 +358,19 @@ public static class CciWriter
 
                         entries.Add((uint)(position >> CciFormat.IndexAlignment) |
                                     (compressed ? 0x80000000u : 0u));
-                        output.Write(block, 0, written);
+                        output.Write(block);
 
-                        position += written;
+                        position += block.Length;
                         partSectors++;
                         sectorsDone++;
-                        bytesOut += written;
+                        bytesOut += block.Length;
 
                         if (sectorsDone % reportInterval == 0)
                         {
                             options.Progress?.Report(new CciProgress(
                                 sectorsDone,
                                 totalSectors,
-                                Math.Min(inputLength, sectorsDone * CciFormat.SectorSize),
+                                Math.Min(inputLength, pipeline.BytesRead),
                                 bytesOut,
                                 partIndex));
                         }
@@ -397,6 +379,11 @@ public static class CciWriter
                     if (partSectors == 0)
                     {
                         break;
+                    }
+
+                    if (pipeline.Error != CciError.None)
+                    {
+                        return pipeline.Error;
                     }
 
                     long indexOffset = position;
@@ -438,6 +425,16 @@ public static class CciWriter
                 return CciError.InvalidSize;
             }
 
+            if (pipeline.Error != CciError.None)
+            {
+                return pipeline.Error;
+            }
+
+            if (sectorsDone != totalSectors)
+            {
+                return CciError.Truncated;
+            }
+
             foreach ((string temp, string final) in files)
             {
                 File.Move(temp, final, options.Overwrite);
@@ -447,7 +444,7 @@ public static class CciWriter
             options.Progress?.Report(new CciProgress(
                 sectorsDone,
                 totalSectors,
-                Math.Min(inputLength, sectorsDone * CciFormat.SectorSize),
+                Math.Min(inputLength, pipeline.BytesRead),
                 bytesOut,
                 Math.Max(0, files.Count - 1)));
 
@@ -471,9 +468,6 @@ public static class CciWriter
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(sector);
-            ArrayPool<byte>.Shared.Return(block);
-
             if (!success)
             {
                 foreach ((string temp, _) in files)
@@ -487,11 +481,16 @@ public static class CciWriter
     private static string PartPath(string basePath, int partNumber) =>
         string.Concat(basePath, ".", partNumber.ToString(System.Globalization.CultureInfo.InvariantCulture), CciFormat.Extension);
 
-    private static int Acceleration(int level) => level == 0 ? 0 : Math.Clamp(10 - level, 1, 10);
+    internal static int Acceleration(int level) => level == 0 ? 0 : Math.Clamp(10 - level, 1, 10);
 
     private static CciError ValidateOptions(CciWriteOptions options)
     {
-        if (options.Level is < 0 or > 9)
+        if (options.Level is < 0 or > 12)
+        {
+            return CciError.InvalidArgument;
+        }
+
+        if (options.Jobs is < 1 or > CciWriteOptions.MaxJobs)
         {
             return CciError.InvalidArgument;
         }
@@ -509,12 +508,12 @@ public static class CciWriter
         return CciError.None;
     }
 
-    private static int ReadFull(Stream stream, byte[] buffer, int count)
+    internal static int ReadFull(Stream stream, byte[] buffer, int offset, int count)
     {
         int total = 0;
         while (total < count)
         {
-            int read = stream.Read(buffer, total, count - total);
+            int read = stream.Read(buffer, offset + total, count - total);
             if (read == 0)
             {
                 break;
@@ -545,4 +544,3 @@ public static class CciWriter
         }
     }
 }
-

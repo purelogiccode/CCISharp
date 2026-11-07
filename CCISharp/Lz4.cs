@@ -255,7 +255,7 @@ public static class Lz4
         return (int)(hash >> HashTableBitShift);
     }
 
-    private static void WriteInteger(Span<byte> destination, ref int pos, int n)
+    internal static void WriteInteger(Span<byte> destination, ref int pos, int n)
     {
         while (n >= 0xFF)
         {
@@ -266,7 +266,7 @@ public static class Lz4
         destination[pos++] = (byte)n;
     }
 
-    private static void WriteLastLiterals(ReadOnlySpan<byte> input, Span<byte> destination, ref int pos, int start)
+    internal static void WriteLastLiterals(ReadOnlySpan<byte> input, Span<byte> destination, ref int pos, int start)
     {
         int litLen = input.Length - start;
         destination[pos++] = litLen < 0xF ? (byte)(litLen << 4) : (byte)0xF0;

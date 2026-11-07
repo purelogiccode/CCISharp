@@ -10,8 +10,8 @@
     <PackageId>CCISharp</PackageId>
     <Authors>purelogiccode</Authors>
     <Title>CCISharp</Title>
-    <Description>A pure-managed C# library for reading and writing CCI ("CCIM", Cerbios Compressed Image) Xbox disc images. Supports single-part and split containers, random-access sector reads, streaming extraction, LZ4 sector compression, and validation.</Description>
-    <PackageTags>cci;ccim;cerbios;xbox;xiso;disc-image;compression;lz4;emulation</PackageTags>
+    <Description>A pure-managed C# library for reading and writing CCI ("CCIM", Cerbios Compressed Image) Xbox disc images. Supports single-part and split containers, random-access sector reads, streaming extraction, fast and LZ4-HC sector compression, parallel compression, and validation.</Description>
+    <PackageTags>cci;ccim;cerbios;xbox;xiso;disc-image;compression;lz4;lz4hc;parallel;emulation</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <MinClientVersion>5.0</MinClientVersion>
 

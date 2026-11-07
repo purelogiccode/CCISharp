@@ -26,11 +26,18 @@ compressed as a single LZ4 block, with a random-access index.
 ## Features
 
 - **Read and write** single-part `.cci` containers.
-- **Split sets** (`name.1.cci` … `name.9.cci`) with transparent stitching.
+- **Split sets** (`name.1.cci` … `name.9.cci`) with transparent stitching;
+  multi-digit parts (`name.10.cci` and higher) are accepted when the set starts
+  at `.1`.
 - **Random access** to any sector, plus a seekable read-only `Stream`.
 - **One-call extraction** to a raw ISO with progress, cancellation and
   preallocation.
 - **Validation** of headers, indexes and (optionally) every sector.
+- **Fast and HC compression:** levels `1..9` use a fast LZ4 encoder, levels
+  `10..12` use a managed LZ4-HC encoder (level 12 matches the reference
+  encoder's HC preset).
+- **Parallel compression:** `Jobs` 1..64 encodes sectors on a bounded worker
+  pool; output is byte-identical to single-threaded compression.
 - **Pure managed**, no native dependencies, trimmable and AOT-compatible.
 - Targets `net8.0`, `net9.0` and `net10.0`.
 
@@ -104,7 +111,8 @@ CciError error = CciWriter.Compress(
     @"C:\games\game.cci",
     new CciWriteOptions
     {
-        Level = 9,                 // 0 = store, 1..9 = speed/ratio presets
+        Level = 12,                // 0 = store, 1..9 = fast, 10..12 = LZ4-HC
+        Jobs = 4,                  // byte-identical to Jobs = 1
         SplitBytes = CciFormat.DefaultSplitBytes,
         Overwrite = false,
     });
@@ -128,13 +136,20 @@ if (error != CciError.None)
 ## Split sets
 
 A split image is a sequence of independent CCI containers, each covering a
-contiguous range of sectors. Open the first part (`game.1.cci`) and the
-library discovers the remaining parts (`game.2.cci` … `game.9.cci`), exactly
-like the reference implementation.
+contiguous range of sectors. Open any part and the library discovers the rest
+of the contiguous set starting at `game.1.cci`:
 
 - `game.cci` is treated as a single-part image.
 - `game.1.cci` triggers split discovery.
+- `game.10.cci` and higher are accepted when the set `game.1.cci` … exists, so
+  images produced by other tools with more than nine parts remain readable.
+- A numeric name that is not part of a contiguous set starting at `.1` is a
+  standalone image.
 - Parts are concatenated by sector range, not by file size.
+- The writer always emits the reference-compatible single-digit layout
+  `game.1.cci` … `game.9.cci`.
+
+See [docs/format.md](docs/format.md#split-sets) for the exact discovery rule.
 
 ## Format notes
 
@@ -149,13 +164,23 @@ Key facts:
 - Compressed block layout: `[pad][LZ4 block][zero padding]`.
 - Version 1, index alignment 2.
 
-CCISharp's encoder is compatible with the format but is not byte-identical to
-libCCI/Repackinator output (different LZ4 encoders). Any conforming LZ4 block
-is accepted by readers.
+CCISharp's encoders are compatible with the format but are not guaranteed to
+be byte-identical to libCCI/Repackinator output. The fast encoder uses a
+`lz4_flex`-compatible parse; the HC encoder is an independent hash-chain
+implementation. Both emit conforming LZ4 blocks, and every tested libCCI decoder
+accepts them. See [docs/interop.md](docs/interop.md) for byte-level results.
 
 A part's index is capped at 64 MiB (~34 GiB of sectors). Valid parts split at
 ~4 GiB and need at most ~8 MiB, so the cap only rejects corrupt or hostile
 headers; oversized indexes return `CciError.InvalidIndex` without allocating.
+
+## Documentation
+
+- [docs/format.md](docs/format.md) — on-disk layout, split rules and limits.
+- [docs/api.md](docs/api.md) — public types, options and error handling.
+- [docs/interop.md](docs/interop.md) — libCCI oracle matrix and byte-level notes.
+- [docs/benchmarks.md](docs/benchmarks.md) — BenchmarkDotNet results and commands.
+- [docs/release-notes.md](docs/release-notes.md) — version history.
 
 ## Error handling
 
@@ -169,9 +194,27 @@ the error code and message.
 ```sh
 dotnet build CCISharp.sln -c Release
 dotnet test CCISharp.Tests/CCISharp.Tests.csproj -c Release
+
+# 60-second mutation fuzz (headers, indexes, blobs, split sets)
+dotnet run --project CCISharp.Fuzz -c Release -- --seconds 60
+
+# Benchmarks
+dotnet run --project CCISharp.Benchmarks -c Release -- --filter "*CciBenchmarks*" -j short
 ```
 
-The repository uses MinVer; release tags are `v1.0.0`, `v1.0.1`, ….
+The repository uses MinVer; release tags are `v1.0.0`, `v1.0.1`, `v1.1.0`, ….
+
+## Command-line tool
+
+`CCISharp.Cli` is a small interop/smoke-test front end (not published as a
+NuGet tool):
+
+```sh
+dotnet run --project CCISharp.Cli -- pack game.iso game --level 12 --jobs 4 --single -y
+dotnet run --project CCISharp.Cli -- info game.cci
+dotnet run --project CCISharp.Cli -- validate game.cci --deep
+dotnet run --project CCISharp.Cli -- unpack game.cci game.iso -y
+```
 
 ## Interoperability
 
@@ -186,8 +229,9 @@ cci_extract game.cci out.iso    # -> raw ISO
 cci_info game.cci               # -> sector count / size
 ```
 
-The `References/libCCI-0.1.0-1b0087e` copy used during development is for
-testing only and is not part of this package.
+The interop matrix also covers HC level 12 and parallel `Jobs = 4` output. The
+`References/libCCI-0.1.0-1b0087e` copy used during development is for testing
+only and is not part of this package.
 
 ## License
 
